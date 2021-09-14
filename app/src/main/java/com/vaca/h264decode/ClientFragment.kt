@@ -1,15 +1,8 @@
 package com.vaca.h264decode
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.graphics.BitmapFactory
-import android.net.ConnectivityManager
-import android.net.NetworkInfo
 import android.net.wifi.WifiManager
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,16 +12,8 @@ import com.vaca.h264decode.client.Client
 import com.vaca.h264decode.databinding.FragmentClientBinding
 import com.vaca.h264decode.utils.PathUtil
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import okhttp3.Response
 import java.io.*
 import java.lang.Exception
-import java.net.Socket
-import java.net.UnknownHostException
-import kotlin.experimental.inv
-import android.annotation.SuppressLint
 import java.util.*
 
 
@@ -128,13 +113,13 @@ class ClientFragment:Fragment() {
 
     private fun getByte(path: String): ByteArray? {
         val f = File(path)
-        val `in`: InputStream
+        val inputStream: InputStream
         var bytes: ByteArray? = null
         try {
-            `in` = FileInputStream(f)
+            inputStream = FileInputStream(f)
             bytes = ByteArray(f.length().toInt())
-            `in`.read(bytes)
-            `in`.close()
+            inputStream.read(bytes)
+            inputStream.close()
         } catch (e: Exception) {
             e.printStackTrace()
         }
