@@ -12,11 +12,14 @@ import android.os.HandlerThread
 import android.util.Log
 import android.util.Size
 import android.view.LayoutInflater
+import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 
 import com.vaca.h264decode.databinding.FragmentServerBinding
+import com.vaca.h264decode.server.Server
+import com.vaca.h264decode.server.VideoDecoder
 import kotlinx.coroutines.*
 import okhttp3.Response
 import java.io.ByteArrayOutputStream
@@ -29,7 +32,6 @@ import kotlin.collections.ArrayList
 class ServerFragment : Fragment() {
     lateinit var binding: FragmentServerBinding
 
-    lateinit var wifiManager: WifiManager
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -37,11 +39,12 @@ class ServerFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
 
-        wifiManager =
-            MainApplication.application.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        binding= FragmentServerBinding.inflate(inflater,container,false)
 
-
-
+        val mSurfaceView =binding.sur
+        val mServer = Server.getInstance();
+        val mVideoDecoder =  VideoDecoder(mSurfaceView.getHolder().getSurface(), mServer);
+        mVideoDecoder.start()
 
 
         return binding.root

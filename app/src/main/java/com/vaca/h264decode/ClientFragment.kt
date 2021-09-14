@@ -3,6 +3,7 @@ package com.vaca.h264decode
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -49,6 +50,7 @@ class ClientFragment:Fragment() {
 
 
         val fileBytes = File(PathUtil.getPathX("w.h264")).readBytes()
+        Log.e("fuk",fileBytes.size.toString())
 
 
         binding.sps.setOnClickListener(object : View.OnClickListener {
