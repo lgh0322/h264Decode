@@ -14,101 +14,34 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import com.vaca.h264decode.client.Client
 
 import com.vaca.h264decode.databinding.FragmentClientBinding
+import com.vaca.h264decode.utils.PathUtil
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Response
-import java.io.ByteArrayInputStream
-import java.io.IOException
+import java.io.*
+import java.lang.Exception
 import java.net.Socket
 import java.net.UnknownHostException
 import kotlin.experimental.inv
+import android.annotation.SuppressLint
+import java.util.*
+
 
 class ClientFragment:Fragment() {
     lateinit var binding: FragmentClientBinding
     lateinit var wifiManager: WifiManager
-    var wifiState = 0
+
+    private var mClient: Client? = null
+    private var count = 0
 
 
 
-
-    private fun isWifiConnected(): Boolean {
-        val connectivityManager =
-            requireActivity().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val wifiNetworkInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI)
-        return wifiNetworkInfo!!.isConnected
-    }
-
-    private fun getConnectWifiSsid(): String? {
-        val wifiInfo = wifiManager!!.connectionInfo
-        Log.d("wifiInfo", wifiInfo.toString())
-        Log.d("SSID", wifiInfo.ssid)
-        return wifiInfo.ssid
-    }
-
-    private val wifiBroadcast: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            // TODO Auto-generated method stub
-            if (intent.action == WifiManager.RSSI_CHANGED_ACTION) {
-                //signal strength changed
-            } else if (intent.action == WifiManager.WIFI_STATE_CHANGED_ACTION) { //wifi打开与否
-                val wifistate = intent.getIntExtra(
-                    WifiManager.EXTRA_WIFI_STATE,
-                    WifiManager.WIFI_STATE_DISABLED
-                )
-                if (wifistate == WifiManager.WIFI_STATE_DISABLED) {
-                    println("系统关闭wifi")
-
-                    wifiState = 0
-                } else if (wifistate == WifiManager.WIFI_STATE_ENABLED) {
-                    println("系统开启wifi")
-                    wifiState = if (isWifiConnected()) {
-                        if (getConnectWifiSsid() == "\"wifisocket\"") {
-                            3
-                        } else {
-                            4
-                        }
-                    } else {
-                        1
-                    }
-                }
-            } else if (intent.action == WifiManager.NETWORK_STATE_CHANGED_ACTION) { //wifi连接上与否
-                println("网络状态改变")
-                val info = intent.getParcelableExtra<NetworkInfo>(WifiManager.EXTRA_NETWORK_INFO)
-                if (info!!.state == NetworkInfo.State.DISCONNECTED) {
-                    println("wifi网络连接断开")
-                    wifiState = 2
-                } else if (info.state == NetworkInfo.State.CONNECTED) {
-                    val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-                    val wifiInfo = wifiManager.connectionInfo
-
-                    //获取当前wifi名称
-                    println("连接到网络 " + wifiInfo.ssid)
-                    wifiState = if (wifiInfo.ssid == "\"wifisocket\"") {
-                        3
-                    } else {
-                        4
-                    }
-                }
-            }
-        }
-    }
-
-    private fun makeGattUpdateIntentFilter(): IntentFilter? {
-        val filter = IntentFilter()
-        filter.addAction(WifiManager.RSSI_CHANGED_ACTION)
-        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
-        filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
-        return filter
-    }
-
-
-
-
-    private fun intToIp(paramInt: Int): String? {
+    private fun intToIp(paramInt: Int): String {
         return ((paramInt.and(255)).toString() + "." + (paramInt.shr(8).and(255)) + "." + (paramInt.shr(16).and(255)) + "."
                 + (paramInt.shr(24).and(255)))
     }
@@ -121,24 +54,101 @@ class ClientFragment:Fragment() {
         wifiManager = MainApplication.application.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
         val gate=intToIp(wifiManager.dhcpInfo.gateway)
-        if (gate != null) {
+
+        Client.HOST_ADDRESS=gate
 
 
-        }
 
-        requireContext().registerReceiver(wifiBroadcast,makeGattUpdateIntentFilter())
+
         binding= FragmentClientBinding.inflate(inflater,container,false)
 
 
+        val fileBytes = File(PathUtil.getPathX("w.h264")).readBytes()
 
 
-
-
+        binding.sps.setOnClickListener(object : View.OnClickListener {
+           override fun onClick(v: View?) {
+                // TODO Auto-generated method stub
+                Thread(java.lang.Runnable {
+                    mClient = Client.getInstance()
+                    mClient?.connect()
+                    start@ for (i in 0 until fileBytes.size) {
+                        if (fileBytes[i] == 0.toByte() && fileBytes[i + 1] == 0.toByte() && fileBytes[i + 2] == 0.toByte() && fileBytes[i + 3] == 1.toByte()) {
+                            end@ for (j in i + 4 until fileBytes.size) {
+                                if (fileBytes[j] == 0.toByte() && fileBytes[j + 1] == 0.toByte() && fileBytes[j + 2] == 0.toByte() && fileBytes[j + 3] == 1.toByte()) {
+                                    val temp: ByteArray = Arrays.copyOfRange(
+                                        fileBytes, i, j
+                                    )
+                                    mClient?.sendLength(intToBytes(temp.size))
+                                    mClient?.sendSPSPPS(temp)
+                                    count++
+                                    if (count === 2) {
+                                        MainScope().launch {
+                                            binding.sps.setEnabled(
+                                                false
+                                            )
+                                        }
+                                        return@Runnable
+                                    }
+                                    break@end
+                                }
+                            }
+                        }
+                    }
+                }).start()
+            }
+        })
+        binding.frame.setOnClickListener(object : View.OnClickListener {
+          override  fun onClick(v: View?) {
+                // TODO Auto-generated method stub
+                Thread { // TODO Auto-generated method stub
+                    start@ for (i in 0 until fileBytes.size) {
+                        if (fileBytes[i] == 0.toByte() && fileBytes[i + 1] == 0.toByte() && fileBytes[i + 2] == 0.toByte() && fileBytes[i + 3] == 1.toByte()
+                        ) {
+                            end@ for (j in i + 4 until fileBytes.size) {
+                                if (fileBytes[j] == 0.toByte() && fileBytes[j + 1] == 0.toByte() && fileBytes[j + 2] == 0.toByte() && fileBytes[j + 3] == 1.toByte()
+                                ) {
+                                    val temp: ByteArray = Arrays.copyOfRange(
+                                        fileBytes, i, j
+                                    )
+                                    mClient?.sendLength(intToBytes(temp.size))
+                                    mClient?.sendFrame(temp)
+                                    break@end
+                                }
+                            }
+                        }
+                    }
+                }.start()
+            }
+        })
 
         return binding.root
     }
 
 
+    private fun getByte(path: String): ByteArray? {
+        val f = File(path)
+        val `in`: InputStream
+        var bytes: ByteArray? = null
+        try {
+            `in` = FileInputStream(f)
+            bytes = ByteArray(f.length().toInt())
+            `in`.read(bytes)
+            `in`.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return bytes
+    }
+
+    fun intToBytes(i: Int): ByteArray {
+        val bytes = ByteArray(4)
+        bytes[0] = (i.and(0xff)).toByte()
+        bytes[1] = (i.shr(8) .and( 0xff)).toByte()
+        bytes[2] = (i. shr (16).and (0xff)).toByte()
+        bytes[3] = (i. shr( 24) .and( 0xff)).toByte()
+        return bytes
+    }
 
 
 

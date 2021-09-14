@@ -13,7 +13,7 @@ public class Client {
 	private static Client mClient;
 	private static Socket mSocket;
 	// 要连接的服务器IP地址
-	private static final String HOST_ADDRESS = "192.168.1.108";
+	public static  String HOST_ADDRESS = "192.168.1.108";
 	// 要连接的服务器端口号
 	private static final int HOST_PORT = 12580;
 
