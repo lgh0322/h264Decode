@@ -8,7 +8,7 @@
 
     <fragment
         android:id="@+id/mainFragment"
-        android:name="com.example.wifihot.fragment.MainFragment"
+        android:name="com.vaca.h264decode.MainFragment"
         android:label="MainFragment" >
         <action
             android:id="@+id/action_mainFragment_to_serverFragment"
@@ -21,11 +21,11 @@
     </fragment>
     <fragment
         android:id="@+id/clientFragment"
-        android:name="com.example.wifihot.client.ClientFragment"
+        android:name="com.vaca.h264decode.ClientFragment"
         android:label="ClientFragment" />
     <fragment
         android:id="@+id/serverFragment"
-        android:name="com.example.wifihot.server.ServerFragment"
+        android:name="com.vaca.h264decode.ServerFragment"
         android:label="ServerFragment"
         />
 </navigation>
