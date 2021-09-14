@@ -12,12 +12,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding= ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        val mSurfaceView=binding.fuck
-        val mServer= Server.getInstance()
-        val mVideoDecoder= VideoDecoder(
-            mSurfaceView.holder.surface,
-            mServer
-        )
-        mVideoDecoder.start()
+
     }
 }
