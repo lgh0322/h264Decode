@@ -1,4 +1,4 @@
-package com.vaca.h264decode;
+package com.vaca.h264decode.server;
 
 /**
  * @brief 一帧的封装

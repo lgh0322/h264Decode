@@ -1,4 +1,4 @@
-package com.vaca.h264decode;
+package com.vaca.h264decode.server;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
