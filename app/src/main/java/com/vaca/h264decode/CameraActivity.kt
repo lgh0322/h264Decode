@@ -1,159 +1,99 @@
-package com.vaca.h264decode;
+package com.vaca.h264decode
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import android.annotation.SuppressLint
+import androidx.appcompat.app.AppCompatActivity
+import android.hardware.Camera.PreviewCallback
+import android.media.MediaCodec
 
+import com.vaca.h264decode.CameraActivity.H264FileTask
+import android.os.Bundle
+import com.vaca.h264decode.R
+import com.vaca.h264decode.CameraActivity
+import android.graphics.ImageFormat
+import android.graphics.Paint
+import android.hardware.Camera
+import kotlin.Throws
+import android.media.MediaFormat
+import android.media.MediaCodecInfo
+import android.media.MediaCodecList
+import android.media.MediaCodecInfo.CodecCapabilities
+import android.util.Log
+import android.view.*
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.net.*
+import java.nio.ByteBuffer
+import java.util.ArrayList
 
-import android.annotation.SuppressLint;
-import android.graphics.ImageFormat;
-import android.graphics.Paint;
-import android.hardware.Camera;
-import android.hardware.Camera.Size;
-import android.media.MediaCodec;
-import android.media.MediaCodecInfo;
-import android.media.MediaCodecList;
-import android.media.MediaFormat;
-import android.os.Bundle;
-import android.util.Log;
-import android.view.Surface;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
-import android.view.View;
-import android.view.Window;
-import android.view.View.OnClickListener;
+@SuppressLint("NewApi")
+class CameraActivity : AppCompatActivity(), SurfaceHolder.Callback, PreviewCallback,
+    View.OnClickListener {
+    private val bOpening = false
+    private var surfaceView: SurfaceView? = null
+    private var surfaceHolder: SurfaceHolder? = null
+    private var mSurface: Surface? = null
+    private var mCamera: Camera? = null
+    private var mCameraWidth = 0
+    private var mCameraHeight = 0
+    private var mSurfaceWidth = 0
+    private var mSurfaceHeight = 0
+    private var mMediaEncoder: MediaCodec? = null
+    private var mMediaDecoder: MediaCodec? = null
+    private var paint: Paint? = null
+    private var address: InetAddress? = null
+    private var socket: DatagramSocket? = null
 
-import androidx.appcompat.app.AppCompatActivity;
+    private var h264FileTask: H264FileTask? = null
+    private var mFrameIndex = 0
+    private lateinit var mEncoderH264Buf: ByteArray
+    private var mMediaHead: ByteArray? = null
+    private val mYuvBuffer = ByteArray(1280 * 720 * 3 / 2)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        requestWindowFeature(Window.FEATURE_NO_TITLE)
+        setContentView(R.layout.activity_camera)
+        findViewById<View>(R.id.btnOpen).setOnClickListener(this)
+        findViewById<View>(R.id.btnClose).setOnClickListener(this)
+        mCameraWidth = 640
+        mCameraHeight = 480
+        if (!setupView()) {
+            Log.e(TAG, "failed to setupView")
+            return
+        }
+        paint = Paint()
+        mMediaEncoder = null
+        mMediaDecoder = null
+        mSurface = null
+        mEncoderH264Buf = ByteArray(10240)
 
+    }
 
-@SuppressLint("NewApi") 
-public class CameraActivity extends AppCompatActivity implements SurfaceHolder.Callback,Camera.PreviewCallback,OnClickListener{
-	
-	
-	private static final String TAG = "StudyCamera";
-	private static final int FRAME_RATE = 15;
-	private static final String REMOTE_HOST= "192.168.1.105";
-	private static final short REMOTE_HOST_PORT = 5000;
-	private static final String H264FILE = "/sdcard/test.h264";
-	
+    override fun onClick(view: View) {
+        when (view.id) {
+            R.id.btnOpen -> {
 
-	
-	private boolean bOpening = false;
-	private SurfaceView surfaceView;
-	private SurfaceHolder surfaceHolder;
-	
-	private Surface	mSurface;
-	private Camera 	mCamera;
-	private int		mCameraWidth,mCameraHeight;
-	private int		mSurfaceWidth,mSurfaceHeight;
-	private MediaCodec mMediaEncoder;
-	private MediaCodec mMediaDecoder;
-	private Paint 		paint;
-	
-	private InetAddress address;
-	private DatagramSocket socket;
-	private UdpSendTask netSendTask;
-	private H264FileTask h264FileTask;
-	
-	private int mFrameIndex = 0;
-	private byte[] mEncoderH264Buf;
-	private byte[] mMediaHead = null;  
-	
-	private byte[] mYuvBuffer = new byte[1280*720*3/2];
-	
-	@Override
-	protected void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		
-		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		
-		setContentView(R.layout.activity_camera);
-		findViewById(R.id.btnOpen).setOnClickListener(this);
-		findViewById(R.id.btnClose).setOnClickListener(this);
-		
-		mCameraWidth =640;
-		mCameraHeight = 480;
-		if(!setupView()){
-			Log.e(TAG, "failed to setupView");
-			return;
-		}	
-		
-		
-		paint = new Paint();
-		mMediaEncoder = null;
-		mMediaDecoder = null;
-		mSurface = null;
-		
-		mEncoderH264Buf = new byte[10240];
-		
-		netSendTask = new UdpSendTask();
-		netSendTask.init();
-		netSendTask.start();
-	}
+            }
+            R.id.btnClose -> {
 
-	
-	
-	@Override
-	public void onClick(View view)
-	{
-		switch(view.getId())
-		{
-		case R.id.btnOpen:
-			{
-				
-				
-				 if(!setupCamera()){
-					Log.e(TAG, "failed to setupCamera");
-					return;
-				}
-							        
-				if(!startCamera()){
-					Log.e(TAG, "failed to openCamera");
-					return;
-				}
-				
-				
-				
-				//play h264 file test
-				//startPlayH264File();
-		        
-				
-			}
-			break;
-		case R.id.btnClose:
-			{
-				if(!stopCamera()){
-					Log.e(TAG, "failed to stopCamera");
-					return;
-				}
-			}
-			break;
-		}
-	}
-	
-	@Override
-	public void surfaceCreated(SurfaceHolder holder) {  
-        Log.i(TAG, "surfaceCreated.");  
-    }  
-	
-	@Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width,  
-            int height) {  
-		Log.i(TAG,"surfaceChanged w:"+width+" h:"+height);
-		mSurface = surfaceHolder.getSurface();
-		
-        mSurfaceWidth = width;
-        mSurfaceHeight = height;
-        
+            }
+        }
+    }
+
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        Log.i(TAG, "surfaceCreated.")
+    }
+
+    override fun surfaceChanged(
+        holder: SurfaceHolder, format: Int, width: Int,
+        height: Int
+    ) {
+        Log.i(TAG, "surfaceChanged w:$width h:$height")
+        mSurface = surfaceHolder!!.surface
+        mSurfaceWidth = width
+        mSurfaceHeight = height
+
         /*
          * get canvas from surface holder with draw something
          * */
@@ -183,483 +123,307 @@ public class CameraActivity extends AppCompatActivity implements SurfaceHolder.C
 //        }
 //
 //        holder.unlockCanvasAndPost(c);
-    }  
-	
-	@Override
-    public void surfaceDestroyed(SurfaceHolder holder) {  
-        Log.i(TAG,"surfaceDestroyed");
-        mSurface = null;
-        releaseCamera();
-    }  
-    
-	
-	@Override
-	public void onPreviewFrame(byte[] rawData, Camera camera)
-	{
-		int w = camera.getParameters().getPreviewSize().width; 
-        int h = camera.getParameters().getPreviewSize().height; 
-        int format = camera.getParameters().getPreviewFormat();
-        Log.d(TAG,"preview frame format:"+format+" size:"+rawData.length+" w:"+w+" h:"+h);
-        	
-		
-        if(mMediaEncoder == null){
-			try {
-				if(!setupEncoder("video/avc",w,h)){
-					releaseCamera();
-					Log.e(TAG, "failed to setupEncoder");
-					return;
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-       
-        assert(mSurface != null);
-        if(mMediaDecoder == null){
-			try {
-				if(!setupDecoder(mSurface,"video/avc",w,h)){
-					releaseCamera();
-					Log.e(TAG, "failed to setupDecoder");
-					return;
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-        
-        //convert yv12 to i420
-        swapYV12toI420(rawData, mYuvBuffer, w, h);
-        System.arraycopy(mYuvBuffer, 0, rawData,0,rawData.length);
-               
-        //set h264 buffer to zero.
-        for(int i=0;i<mEncoderH264Buf.length;i++)
-        	mEncoderH264Buf[i]=0;
-        int encoderRet = offerEncoder(rawData,mEncoderH264Buf);
-        if(encoderRet > 0){
-        	Log.d(TAG,"encoder output h264 buffer len:"+encoderRet);
-        	/**
-        	 * send to VLC client by udp://@port;
-        	 */
-        	netSendTask.pushBuf(mEncoderH264Buf,encoderRet);
-        	
-        	/**
-        	 * push data to decoder
-        	 */
-        	offerDecoder(mEncoderH264Buf,encoderRet);
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        Log.i(TAG, "surfaceDestroyed")
+        mSurface = null
+
+    }
+
+    override fun onPreviewFrame(rawData: ByteArray, camera: Camera) {
+        val w = camera.parameters.previewSize.width
+        val h = camera.parameters.previewSize.height
+
+        if (mMediaEncoder == null) {
+            try {
+                setupEncoder("video/avc", w, h)
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
         }
-		
-        
+        assert(mSurface != null)
+        if (mMediaDecoder == null) {
+            try {
+                setupDecoder(mSurface, "video/avc", w, h)
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }
+
+        //convert yv12 to i420
+        swapYV12toI420(rawData, mYuvBuffer, w, h)
+        System.arraycopy(mYuvBuffer, 0, rawData, 0, rawData.size)
+
+        //set h264 buffer to zero.
+        for (i in mEncoderH264Buf.indices) mEncoderH264Buf[i] = 0
+        val encoderRet = offerEncoder(rawData, mEncoderH264Buf)
+        if (encoderRet > 0) {
+            Log.d(TAG, "encoder output h264 buffer len:$encoderRet")
+            /**
+             * send to VLC client by udp://@port;
+             */
+//            netSendTask!!.pushBuf(mEncoderH264Buf, encoderRet)
+            /**
+             * push data to decoder
+             */
+            offerDecoder(mEncoderH264Buf, encoderRet)
+        }
+
+
         //reset buff to camera.
-		camera.addCallbackBuffer(rawData);
-	}
-	
-	/**
-	 * 
-	 */
-	private boolean setupView()
-	{
-		Log.d(TAG,"fall in setupView");
-		
-		
+        camera.addCallbackBuffer(rawData)
+    }
+
+    /**
+     *
+     */
+    private fun setupView(): Boolean {
+        Log.d(TAG, "fall in setupView")
         if (null != surfaceHolder) {
-        	surfaceHolder.removeCallback(this);
-        	surfaceView = null;
+            surfaceHolder!!.removeCallback(this)
+            surfaceView = null
         }
         if (null != surfaceView) {
-        	surfaceView = null;
+            surfaceView = null
         }
-        
-		surfaceView = (SurfaceView)findViewById(R.id.surfaceView);
-		surfaceHolder = surfaceView.getHolder();
-		surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
-		surfaceHolder.addCallback(this);
-		return true;
-	}
-	
-	private boolean setupCamera()
-	{
-		Log.d(TAG,"fall in setupCamera");
-		if (null != mCamera) {
-			mCamera.release();
-			mCamera = null;
-        }
-		
-		mCamera = Camera.open(); // Turn on the camera
-		
-		Camera.Parameters parameters = mCamera.getParameters(); // Camera parameters to obtain
-		List<Size> listSize = parameters.getSupportedVideoSizes();
-		for(int i=0;listSize != null && i<listSize.size();i++){
-			Size size = listSize.get(i);
-			Log.d(TAG, "supportedSize:"+size.width+"-"+size.height);
-		}
-		
-		int width = mCameraWidth,height = mCameraHeight;
-		
-		List<Integer> listFormats = parameters.getSupportedPreviewFormats();
-		for(int i=0;i<listFormats.size();i++){
-			Integer format = listFormats.get(i);
-			Log.d(TAG, "supportedFormat:"+format);
-		}
-		
-		parameters.setFlashMode("off"); // �������  
-		parameters.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_AUTO);  
-		parameters.setSceneMode(Camera.Parameters.SCENE_MODE_AUTO);  
-		parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);   
-		//parameters.setPreviewFormat(ImageFormat.NV21);
-		parameters.setPreviewFormat(ImageFormat.YV12);
-		parameters.setPreviewSize(width, height);
-		parameters.setPictureSize(width, height);
-		
-		Log.d(TAG,"setup Camera w:"+width+" h:"+height);
-		mCamera.setParameters(parameters); // Setting camera parameters
-		
-		
-		//alloc buffer for camera callback data with once.
-		byte[] rawBuf = new byte[mCameraWidth * mCameraHeight * 3 / 2];  
-		mCamera.addCallbackBuffer(rawBuf);
-		
-		/*set the buffer must be use setPreviewCallbackWithBuffer*/
-		//mCamera.setPreviewCallback(this);
-        mCamera.setPreviewCallbackWithBuffer(this);
-       
-		//unused preview display to surface view by first;
-		/*
-		try {
-            mCamera.setPreviewDisplay(surfaceHolder); // Set Preview
-            mCamera.setDisplayOrientation(90);
-        } catch (IOException e) {
-        	Log.e(TAG,"failed to setPreviewDisplay");
-            mCamera.release();// release camera  
-            mCamera = null; 
-            return false;
-        }
-		*/
-        
-		return true;
-	}
-	
-	private boolean startCamera(){
-		Log.d(TAG,"fall in startCamera");
-		if(bOpening)return false;
-		mCamera.startPreview(); // Start Preview  
-        bOpening = true;
-		return true;
-	}
-	
-	private boolean stopCamera(){
-		Log.d(TAG,"fall in stop Camera");
-		if(!bOpening)return false;
-		
-		mCamera.stopPreview();// stop preview 
-		bOpening = false;
-		return true;
-	}
-	
-	private boolean releaseCamera()
-	{
-		Log.d(TAG,"fall in release Camera");
-		mCamera.stopPreview();
-		mCamera.release(); // Release camera resources  
-        mCamera = null; 
-        return true;
-	}
-	
-	
-	private boolean setupEncoder(String mime, int width, int height) throws IOException {
-		int colorFormat = selectColorFormat(selectCodec(mime), mime);
-		Log.d(TAG,"setupEncoder "+mime+" colorFormat:"+colorFormat+" w:"+width+" h:"+height);
-		
-		mMediaEncoder = MediaCodec.createEncoderByType(mime);  
-		MediaFormat mediaFormat = MediaFormat.createVideoFormat(mime, width, height);
-		mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, 125000);  
-		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);  
-		//mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar);
-		mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat);
-		mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 5);
-		mMediaEncoder.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);  
-		mMediaEncoder.start();
-	
-		return true;
-	}
-	
-	private boolean setupDecoder(Surface surface,String mime,int width, int height) throws IOException {
-		Log.d(TAG,"setupDecoder surface:"+surface+" mime:"+mime+" w:"+width+" h:"+height);
-		
-		MediaFormat mediaFormat = MediaFormat.createVideoFormat(mime,width,height);		
-		mMediaDecoder = MediaCodec.createDecoderByType(mime);
-		if (mMediaDecoder == null) {
-			Log.e("DecodeActivity", "createDecoderByType fail!");
-			return false;
-		}
-			
-		/*
-		int codecCount = MediaCodecList.getCodecCount();
-		for(int i=0;i<codecCount;i++){
-			MediaCodecInfo info =MediaCodecList.getCodecInfoAt(i);
-			Log.d(TAG,"codec:"+info.getName());
-		}*/
-		
-		mMediaDecoder.configure(mediaFormat, surface, null, 0);  
-		mMediaDecoder.start();
-		
-		return true;
-	}
-	
-	private int offerEncoder(byte[] input,byte[] output) {
+        surfaceView = findViewById<View>(R.id.surfaceView) as SurfaceView
+        surfaceHolder = surfaceView!!.holder
+        surfaceHolder!!.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS)
+        surfaceHolder!!.addCallback(this)
+        return true
+    }
 
-		int pos = 0;          
-	    try {
-	        ByteBuffer[] inputBuffers = mMediaEncoder.getInputBuffers();
-	        ByteBuffer[] outputBuffers = mMediaEncoder.getOutputBuffers();
-	        int inputBufferIndex = mMediaEncoder.dequeueInputBuffer(-1);
-	        if (inputBufferIndex >= 0) {
-	            ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
-	            Log.d(TAG,"offerEncoder InputBufSize: " +inputBuffer.capacity()+" inputSize: "+input.length + " bytes");
-	            inputBuffer.clear();
-	            inputBuffer.put(input);
-	            mMediaEncoder.queueInputBuffer(inputBufferIndex, 0, input.length, 0, 0);
-	            
-	        }
-	       
-	        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-	        int outputBufferIndex = mMediaEncoder.dequeueOutputBuffer(bufferInfo,0);
-	        while (outputBufferIndex >= 0) {
-	        	ByteBuffer outputBuffer = outputBuffers[outputBufferIndex];
-	        	
-	        	byte[] data = new byte[bufferInfo.size];
-	            outputBuffer.get(data);
-	            
-	            Log.d(TAG,"offerEncoder InputBufSize:"+outputBuffer.capacity()+" outputSize:"+ data.length + " bytes written");
-	            
-	            if(mMediaHead != null)  
-                {                 
-                    System.arraycopy(data, 0,  output, pos, data.length);  
-                    pos += data.length;  
-				} else // ����pps sps ֻ�п�ʼʱ ��һ��֡���У� ��������������
-				{
-					Log.d(TAG, "offer Encoder save sps head,len:"+data.length);
-					ByteBuffer spsPpsBuffer = ByteBuffer.wrap(data);
-					if (spsPpsBuffer.getInt() == 0x00000001) {
-						mMediaHead = new byte[data.length];
-						System.arraycopy(data, 0, mMediaHead, 0, data.length);
-					} else {
-						Log.e(TAG,"not found media head.");
-						return -1;
-					}
-				}
 
-	            mMediaEncoder.releaseOutputBuffer(outputBufferIndex, false);
-	            outputBufferIndex = mMediaEncoder.dequeueOutputBuffer(bufferInfo, 0);
-	            
-	          
-	        }
-	        
-	        if(output[4] == 0x65) //key frame   ���������ɹؼ�֡ʱֻ�� 00 00 00 01 65 û��pps sps�� Ҫ����  
-            {
-                System.arraycopy(output, 0,  input, 0, pos);  
-                System.arraycopy(mMediaHead, 0,  output, 0, mMediaHead.length);  
-                System.arraycopy(input, 0,  output, mMediaHead.length, pos);  
-                pos += mMediaHead.length;  
-            }  
-	        
-	    } catch (Throwable t) {
-	        t.printStackTrace();
-	    }
-	    return pos;
-	}
-	
-	
-	private  void offerDecoder(byte[] input,int length) {
-		try {
-	        ByteBuffer[] inputBuffers = mMediaDecoder.getInputBuffers();
-	        int inputBufferIndex = mMediaDecoder.dequeueInputBuffer(-1);
-	        if (inputBufferIndex >= 0) {
-	            ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
-	            long timestamp = mFrameIndex++ * 1000000 / FRAME_RATE;
-	            Log.d(TAG,"offerDecoder timestamp: " +timestamp+" inputSize: "+length + " bytes");
-	            inputBuffer.clear();
-	            inputBuffer.put(input,0,length);
-	            mMediaDecoder.queueInputBuffer(inputBufferIndex, 0, length, timestamp, 0);
-	        }
-	        
-	        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-	        int outputBufferIndex = mMediaDecoder.dequeueOutputBuffer(bufferInfo,0);
-	        while (outputBufferIndex >= 0) {
-	        	Log.d(TAG,"offerDecoder OutputBufSize:"+bufferInfo.size+ " bytes written");
-	        	
-	        	//If a valid surface was specified when configuring the codec, 
-	        	//passing true renders this output buffer to the surface.  
-	            mMediaDecoder.releaseOutputBuffer(outputBufferIndex, true);
-	            outputBufferIndex = mMediaDecoder.dequeueOutputBuffer(bufferInfo, 0);
-	        }
-	    } catch (Throwable t) {
-	        t.printStackTrace(); 
-	    }
-	}
-	
-	
-	private void startPlayH264File() throws IOException {
-		assert(mSurface != null);
-        if(mMediaDecoder == null){
-        	if(!setupDecoder(mSurface,"video/avc",mSurfaceWidth,mSurfaceHeight)){
-    			Log.e(TAG, "failed to setupDecoder");
-    			return;
-    		}
+    @Throws(IOException::class)
+    private fun setupEncoder(mime: String, width: Int, height: Int): Boolean {
+        val colorFormat = selectColorFormat(selectCodec(mime), mime)
+        Log.d(TAG, "setupEncoder $mime colorFormat:$colorFormat w:$width h:$height")
+        mMediaEncoder = MediaCodec.createEncoderByType(mime)
+        val mediaFormat = MediaFormat.createVideoFormat(mime, width, height)
+        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, 125000)
+        mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE)
+        mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat)
+        mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 5)
+        mMediaEncoder!!.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        mMediaEncoder!!.start()
+        return true
+    }
+
+    @Throws(IOException::class)
+    private fun setupDecoder(surface: Surface?, mime: String, width: Int, height: Int): Boolean {
+        Log.d(TAG, "setupDecoder surface:$surface mime:$mime w:$width h:$height")
+        val mediaFormat = MediaFormat.createVideoFormat(mime, width, height)
+        mMediaDecoder = MediaCodec.createDecoderByType(mime)
+        if (mMediaDecoder == null) {
+            Log.e("DecodeActivity", "createDecoderByType fail!")
+            return false
         }
-		
-        h264FileTask = new H264FileTask();
-        h264FileTask.start();
-	}
-	
-	
-	private void swapYV12toI420(byte[] yv12bytes, byte[] i420bytes, int width, int height)   
-    {        
-        System.arraycopy(yv12bytes, 0, i420bytes, 0,width*height);
-        System.arraycopy(yv12bytes, width*height+width*height/4, i420bytes, width*height,width*height/4);  
-        System.arraycopy(yv12bytes, width*height, i420bytes, width*height+width*height/4,width*height/4);    
-    }    
-	
-		
-	private void readH264FromFile(){
-		
-		File file = new File(H264FILE);
-		if(!file.exists() || !file.canRead()){
-			Log.e(TAG,"failed to open h264 file.");
-			return;
-		}
-		
-		try {
-			int len = 0;
-			FileInputStream fis = new FileInputStream(file);
-			byte[] buf = new byte[1024];
-			while ((len = fis.read(buf)) > 0){
-				offerDecoder(buf, len);
-			}
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch(IOException e){
-			e.printStackTrace();
-		}
-		
-		return;		
-	}
-		
-	
-	/**
-     * Returns the first codec capable of encoding the specified MIME type, or null if no
-     * match was found.
-     */
-	private static MediaCodecInfo selectCodec(String mimeType) {
-        int numCodecs = MediaCodecList.getCodecCount();
-        for (int i = 0; i < numCodecs; i++) {
-            MediaCodecInfo codecInfo = MediaCodecList.getCodecInfoAt(i);
 
-            if (!codecInfo.isEncoder()) {
-                continue;
+        mMediaDecoder!!.configure(mediaFormat, surface, null, 0)
+        mMediaDecoder!!.start()
+        return true
+    }
+
+    private fun offerEncoder(input: ByteArray, output: ByteArray): Int {
+        var pos = 0
+        try {
+            val inputBuffers = mMediaEncoder!!.inputBuffers
+            val outputBuffers = mMediaEncoder!!.outputBuffers
+            val inputBufferIndex = mMediaEncoder!!.dequeueInputBuffer(-1)
+            if (inputBufferIndex >= 0) {
+                val inputBuffer = inputBuffers[inputBufferIndex]
+                Log.d(
+                    TAG,
+                    "offerEncoder InputBufSize: " + inputBuffer.capacity() + " inputSize: " + input.size + " bytes"
+                )
+                inputBuffer.clear()
+                inputBuffer.put(input)
+                mMediaEncoder!!.queueInputBuffer(inputBufferIndex, 0, input.size, 0, 0)
             }
+            val bufferInfo = MediaCodec.BufferInfo()
+            var outputBufferIndex = mMediaEncoder!!.dequeueOutputBuffer(bufferInfo, 0)
+            while (outputBufferIndex >= 0) {
+                val outputBuffer = outputBuffers[outputBufferIndex]
+                val data = ByteArray(bufferInfo.size)
+                outputBuffer[data]
+                Log.d(
+                    TAG,
+                    "offerEncoder InputBufSize:" + outputBuffer.capacity() + " outputSize:" + data.size + " bytes written"
+                )
+                if (mMediaHead != null) {
+                    System.arraycopy(data, 0, output, pos, data.size)
+                    pos += data.size
+                } else {
+                    Log.d(TAG, "offer Encoder save sps head,len:" + data.size)
+                    val spsPpsBuffer = ByteBuffer.wrap(data)
+                    if (spsPpsBuffer.int == 0x00000001) {
+                        mMediaHead = ByteArray(data.size)
+                        System.arraycopy(data, 0, mMediaHead, 0, data.size)
+                    } else {
+                        Log.e(TAG, "not found media head.")
+                        return -1
+                    }
+                }
+                mMediaEncoder!!.releaseOutputBuffer(outputBufferIndex, false)
+                outputBufferIndex = mMediaEncoder!!.dequeueOutputBuffer(bufferInfo, 0)
+            }
+            if (output[4] == 0x65.toByte()) //key frame   ���������ɹؼ�֡ʱֻ�� 00 00 00 01 65 û��pps sps�� Ҫ����
+            {
+                System.arraycopy(output, 0, input, 0, pos)
+                System.arraycopy(mMediaHead, 0, output, 0, mMediaHead!!.size)
+                System.arraycopy(input, 0, output, mMediaHead!!.size, pos)
+                pos += mMediaHead!!.size
+            }
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
+        return pos
+    }
 
-            String[] types = codecInfo.getSupportedTypes();
-            for (int j = 0; j < types.length; j++) {
-                if (types[j].equalsIgnoreCase(mimeType)) {
-                    return codecInfo;
+    private fun offerDecoder(input: ByteArray, length: Int) {
+        try {
+            val inputBuffers = mMediaDecoder!!.inputBuffers
+            val inputBufferIndex = mMediaDecoder!!.dequeueInputBuffer(-1)
+            if (inputBufferIndex >= 0) {
+                val inputBuffer = inputBuffers[inputBufferIndex]
+                val timestamp = (mFrameIndex++ * 1000000 / FRAME_RATE).toLong()
+                Log.d(TAG, "offerDecoder timestamp: $timestamp inputSize: $length bytes")
+                inputBuffer.clear()
+                inputBuffer.put(input, 0, length)
+                mMediaDecoder!!.queueInputBuffer(inputBufferIndex, 0, length, timestamp, 0)
+            }
+            val bufferInfo = MediaCodec.BufferInfo()
+            var outputBufferIndex = mMediaDecoder!!.dequeueOutputBuffer(bufferInfo, 0)
+            while (outputBufferIndex >= 0) {
+                Log.d(TAG, "offerDecoder OutputBufSize:" + bufferInfo.size + " bytes written")
+
+                //If a valid surface was specified when configuring the codec, 
+                //passing true renders this output buffer to the surface.  
+                mMediaDecoder!!.releaseOutputBuffer(outputBufferIndex, true)
+                outputBufferIndex = mMediaDecoder!!.dequeueOutputBuffer(bufferInfo, 0)
+            }
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun startPlayH264File() {
+        assert(mSurface != null)
+        if (mMediaDecoder == null) {
+            if (!setupDecoder(mSurface, "video/avc", mSurfaceWidth, mSurfaceHeight)) {
+                Log.e(TAG, "failed to setupDecoder")
+                return
+            }
+        }
+        h264FileTask = H264FileTask()
+        h264FileTask!!.start()
+    }
+
+    private fun swapYV12toI420(
+        yv12bytes: ByteArray,
+        i420bytes: ByteArray,
+        width: Int,
+        height: Int
+    ) {
+        System.arraycopy(yv12bytes, 0, i420bytes, 0, width * height)
+        System.arraycopy(
+            yv12bytes,
+            width * height + width * height / 4,
+            i420bytes,
+            width * height,
+            width * height / 4
+        )
+        System.arraycopy(
+            yv12bytes,
+            width * height,
+            i420bytes,
+            width * height + width * height / 4,
+            width * height / 4
+        )
+    }
+
+    private fun readH264FromFile() {
+        val file = File(H264FILE)
+        if (!file.exists() || !file.canRead()) {
+            Log.e(TAG, "failed to open h264 file.")
+            return
+        }
+        try {
+            var len = 0
+            val fis = FileInputStream(file)
+            val buf = ByteArray(1024)
+            while (fis.read(buf).also { len = it } > 0) {
+                offerDecoder(buf, len)
+            }
+        } catch (e: FileNotFoundException) {
+            e.printStackTrace()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+        return
+    }
+
+    internal inner class H264FileTask : Thread() {
+        override fun run() {
+            Log.d(TAG, "fall in H264File Read thread")
+            readH264FromFile()
+        }
+    }
+
+
+    companion object {
+        private const val TAG = "StudyCamera"
+        private const val FRAME_RATE = 15
+        private const val REMOTE_HOST = "192.168.1.105"
+        private const val REMOTE_HOST_PORT: Short = 5000
+        private const val H264FILE = "/sdcard/test.h264"
+
+
+        private fun selectCodec(mimeType: String): MediaCodecInfo? {
+            val numCodecs = MediaCodecList.getCodecCount()
+            for (i in 0 until numCodecs) {
+                val codecInfo = MediaCodecList.getCodecInfoAt(i)
+                if (!codecInfo.isEncoder) {
+                    continue
+                }
+                val types = codecInfo.supportedTypes
+                for (j in types.indices) {
+                    if (types[j].equals(mimeType, ignoreCase = true)) {
+                        return codecInfo
+                    }
                 }
             }
+            return null
         }
-        return null;
-    }
 
-    /**
-     * Returns a color format that is supported by the codec and by this test code.  If no
-     * match is found, this throws a test failure -- the set of formats known to the test
-     * should be expanded for new platforms.
-     */
-    private static int selectColorFormat(MediaCodecInfo codecInfo, String mimeType) {
-        MediaCodecInfo.CodecCapabilities capabilities = codecInfo.getCapabilitiesForType(mimeType);
-        for (int i = 0; i < capabilities.colorFormats.length; i++) {
-            int colorFormat = capabilities.colorFormats[i];
-            if (isRecognizedFormat(colorFormat)) {
-                return colorFormat;
+        /**
+         * Returns a color format that is supported by the codec and by this test code.  If no
+         * match is found, this throws a test failure -- the set of formats known to the test
+         * should be expanded for new platforms.
+         */
+        private fun selectColorFormat(codecInfo: MediaCodecInfo?, mimeType: String): Int {
+            val capabilities = codecInfo!!.getCapabilitiesForType(mimeType)
+            for (i in capabilities.colorFormats.indices) {
+                val colorFormat = capabilities.colorFormats[i]
+                if (isRecognizedFormat(colorFormat)) {
+                    return colorFormat
+                }
+            }
+            Log.e(TAG, "couldn't find a good color format for " + codecInfo.name + " / " + mimeType)
+            return 0 // not reached
+        }
+
+        /**
+         * Returns true if this is a color format that this test code understands (i.e. we know how
+         * to read and generate frames in this format).
+         */
+        private fun isRecognizedFormat(colorFormat: Int): Boolean {
+            return when (colorFormat) {
+                CodecCapabilities.COLOR_FormatYUV420Planar, CodecCapabilities.COLOR_FormatYUV420PackedPlanar, CodecCapabilities.COLOR_FormatYUV420SemiPlanar, CodecCapabilities.COLOR_FormatYUV420PackedSemiPlanar, CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar -> true
+                else -> false
             }
         }
-        Log.e(TAG,"couldn't find a good color format for " + codecInfo.getName() + " / " + mimeType);
-        return 0;   // not reached
     }
-
-    /**
-     * Returns true if this is a color format that this test code understands (i.e. we know how
-     * to read and generate frames in this format).
-     */
-    private static boolean isRecognizedFormat(int colorFormat) {
-        switch (colorFormat) {
-            // these are the formats we know how to handle for this test
-            case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
-            case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar:
-            case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
-            case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedSemiPlanar:
-            case MediaCodecInfo.CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar:
-                return true;
-            default:
-                return false;
-        }
-    }
-    
-    
-	
-	class H264FileTask extends Thread{
-		@Override
-		public void run() {
-			Log.d(TAG,"fall in H264File Read thread");
-			readH264FromFile();
-		}
-	}
-	
-	class UdpSendTask extends Thread{
-		private ArrayList<ByteBuffer> mList;
-		public void init()
-		{
-			try {  
-	            socket = new DatagramSocket();  
-	            address = InetAddress.getByName(REMOTE_HOST);  
-	        } catch (SocketException e) {  
-	            e.printStackTrace();  
-	        } catch (UnknownHostException e) {
-	            e.printStackTrace();  
-	        }
-			
-			mList = new ArrayList<ByteBuffer>();
-			
-		}
-		public void pushBuf(byte[] buf,int len)
-		{
-			ByteBuffer buffer = ByteBuffer.allocate(len);
-			buffer.put(buf,0,len);
-			mList.add(buffer);
-		}
-		
-		@Override  
-	    public void run() {
-			Log.d(TAG,"fall in udp send thread");
-			while(true){
-				if(mList.size() <= 0){
-		        	try {
-						Thread.sleep(100);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-		        }
-		        while(mList.size() > 0){
-		        	ByteBuffer sendBuf = mList.get(0);
-		        	try {         
-		        		Log.d(TAG,"send udp packet len:"+sendBuf.capacity());
-		                DatagramPacket packet=new DatagramPacket(sendBuf.array(),sendBuf.capacity(), address,REMOTE_HOST_PORT);  
-		                socket.send(packet);  
-		            } catch (Throwable t) {
-		    	        t.printStackTrace();
-		    	    }
-		        	mList.remove(0);
-		        }	
-			}
-	    }  
-	}
-	
 }
