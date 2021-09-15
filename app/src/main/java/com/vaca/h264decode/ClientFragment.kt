@@ -69,7 +69,7 @@ class ClientFragment:Fragment() {
                                     mClient?.sendLength(intToBytes(temp.size))
                                     mClient?.sendSPSPPS(temp)
                                     count++
-                                    if (count === 2) {
+                                    if (count == 2) {
                                         MainScope().launch {
                                             binding.sps.setEnabled(
                                                 false
